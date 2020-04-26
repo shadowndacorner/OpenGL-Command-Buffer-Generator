@@ -118,6 +118,31 @@ namespace GLThreadGen
             await context.EmitLine("}");
         }
 
+        private static async Task EmitClassStructEnumBlock(this CodegenContext context, string type, string name, Func<Task> cb)
+        {
+            await context.EmitLine($"{type} {name}");
+            await context.EmitLine("{");
+            ++context.IndentLevel;
+            await cb();
+            --context.IndentLevel;
+            await context.EmitLine("};");
+        }
+
+        public static async Task EmitClass(this CodegenContext context, string name, Func<Task> cb)
+        {
+            await context.EmitClassStructEnumBlock("class", name, cb);
+        }
+
+        public static async Task EmitStruct(this CodegenContext context, string name, Func<Task> cb)
+        {
+            await context.EmitClassStructEnumBlock("struct", name, cb);
+        }
+
+        public static async Task EmitEnum(this CodegenContext context, string name, Func<Task> cb)
+        {
+            await context.EmitClassStructEnumBlock("enum", name, cb);
+        }
+
         public static async Task EmitScope(this CodegenContext context, Action cb)
         {
             await context.EmitLine("{");

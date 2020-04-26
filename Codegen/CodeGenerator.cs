@@ -976,35 +976,25 @@ namespace multigl
                 context.EmitLine();
 
                 await context.EmitLine("namespace multigl");
-                await context.EmitLine("{");
-                ++context.IndentLevel;
+                await context.EmitScope(async ()=>
                 {
 
                     await context.EmitLine($"typedef {enumType} gl_command_id_t;");
                     await context.EmitLine("namespace CommandIdEnum");
-                    await context.EmitLine("{");
-                    ++context.IndentLevel;
+                    await context.EmitScope(async () =>
                     {
-                        await context.EmitLine("enum Enum : gl_command_id_t");
-                        await context.EmitLine("{");
-                        ++context.IndentLevel;
+                        await context.EmitEnum("Enum : gl_command_id_t", async () =>
                         {
-                            foreach(var v in Parser.Functions)
+                            foreach (var v in Parser.Functions)
                             {
                                 await context.EmitLine($"{v.Value.NoGLName},");
                             }
                             await context.EmitLine("Count");
-                        }
-                        --context.IndentLevel;
-                        await context.EmitLine("};");
-                    }
-                    --context.IndentLevel;
-                    await context.EmitLine("}");
+                        });
+                    });
 
                     await context.EmitLine("typedef CommandIdEnum::Enum CommandId;");
-                }
-                --context.IndentLevel;
-                await context.EmitLine("}");
+                });
             }
         }
 
@@ -1020,12 +1010,9 @@ namespace multigl
 
                 context.EmitLine();
                 await context.EmitLine("namespace multigl");
-                await context.EmitLine("{");
-                ++context.IndentLevel;
+                await context.EmitScope(async () =>
                 {
-                    await context.EmitLine("class CommandBuffer");
-                    await context.EmitLine("{");
-                    ++context.IndentLevel;
+                    await context.EmitClass("CommandBuffer", async ()=>
                     {
                         await context.EmitStructAccess("public");
                         await context.EmitLine("CommandBuffer(ResourceManager& manager);");
@@ -1066,12 +1053,8 @@ namespace multigl
                         await context.EmitLine($"ResourceManager& {ResourceManager};");
                         await context.EmitLine($"raw_rw_buffer {DataBuffer};");
 
-                    }
-                    --context.IndentLevel;
-                    await context.EmitLine("};");
-                }
-                --context.IndentLevel;
-                await context.EmitLine("}");
+                    });
+                });
             }
         }
 
