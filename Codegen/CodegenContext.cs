@@ -69,8 +69,36 @@ namespace GLThreadGen
         }
     }
 
+    public class CodegenContextAccessTracker
+    {
+        public CodegenContextAccessTracker(CodegenContext ctxt, string active)
+        {
+            context = ctxt;
+            current = active;
+        }
+
+        public async Task WriteAccess(string access)
+        {
+            if (access != current)
+            {
+                context.EmitLine();
+
+                await context.EmitStructAccess(access);
+                current = access;
+            }
+        }
+
+        CodegenContext context;
+        string current;
+    }
+
     public static class CodeGenCPPExtensions
     {
+        public static CodegenContextAccessTracker CreateAccessTracker(this CodegenContext context, string active)
+        {
+            return new CodegenContextAccessTracker(context, active);
+        }
+
         public static async Task EmitStructAccess(this CodegenContext context, string access)
         {
             if (!access.EndsWith(':'))

@@ -376,7 +376,7 @@ namespace multigl
             {
                 var context = new CodegenContext(header);
                 await context.EmitLine("#pragma once");
-                await context.EmitLine("#include \"glad/glad.h\"");
+                await context.EmitLine("#include <glad/glad.h>");
                 await context.EmitLine("#include \"raw_rw_buffer.hpp\"");
                 context.EmitLine();
                 await context.EmitLine("namespace multigl");
@@ -393,8 +393,13 @@ namespace multigl
                         context.EmitLine();
 
                         await context.EmitStructAccess("public");
+
+                        var accessTracker = context.CreateAccessTracker("public");
                         foreach (var function in Parser.Functions.Values)
                         {
+                            // TODO: Allow for overrides here
+                            await accessTracker.WriteAccess("public");
+
                             var noGLName = function.NoGLName;
                             context.EmitIndent();
 
