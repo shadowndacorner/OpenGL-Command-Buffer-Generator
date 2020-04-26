@@ -323,7 +323,10 @@ namespace GLThreadGen
 			while (!parser.IsSymbol(')'))
 			{
 				var argString = parser.ReadUntil(',', ')');
-				funcType.Arguments.Add(new FunctionArgs(argString));
+				var arg = new FunctionArgs(argString);
+				if (arg.Name != null && arg.Type != null && arg.Name.Length > 0 && arg.Type.Length > 0)
+					funcType.Arguments.Add(arg);
+
 				parser.IsSymbol(',');
 			}
 

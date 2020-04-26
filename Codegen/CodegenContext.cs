@@ -80,5 +80,23 @@ namespace GLThreadGen
             await context.EmitLine(access);
             ++context.IndentLevel;
         }
+
+        public static async Task EmitScope(this CodegenContext context, Func<Task> cb)
+        {
+            await context.EmitLine("{");
+            ++context.IndentLevel;
+            await cb();
+            --context.IndentLevel;
+            await context.EmitLine("}");
+        }
+
+        public static async Task EmitScope(this CodegenContext context, Action cb)
+        {
+            await context.EmitLine("{");
+            ++context.IndentLevel;
+            cb();
+            --context.IndentLevel;
+            await context.EmitLine("}");
+        }
     }
 }

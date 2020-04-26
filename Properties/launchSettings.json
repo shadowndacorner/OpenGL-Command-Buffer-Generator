@@ -2,7 +2,7 @@
   "profiles": {
     "glthreadgen": {
       "commandName": "Project",
-      "commandLineArgs": "-i \"D:\\Users\\Ian\\Source\\Repos\\rasterduck\\blade-module-sample\\modules\\blade\\opengl_renderer\\glad\\include\\glad\\glad.h\""
+      "commandLineArgs": "-i \"D:\\Users\\Ian\\Source\\Repos\\rasterduck\\blade-module-sample\\modules\\blade\\opengl_renderer\\glad\\include\\glad\\glad.h\" -o \"D:\\Users\\Ian\\Source\\Repos\\rasterduck\\opengl-commandbuffer-generator-sample\\generated\""
     }
   }
 }
