@@ -44,6 +44,27 @@ namespace GLThreadGen.Overrides
                     await context.EmitLine($"glCreateTextures({arg .Name}, 1, &{ResourceType.ToLower()});");
                 }
             );
+            
+            overrides.RegisterOverride("glGenTextures",
+                overrideEntry: (fn) => {
+                    fn.Name = "glGenTexture";
+                    
+                    var args = fn.Type.Arguments;
+                    args.Clear();
+                    fn.Type.ReturnType = ResourceHandleType;
+                },
+                modifyWriteFunc: async (context, defaultWrite, entry) => {
+                    context.EmitLine();
+                    await context.EmitLine($"auto handle = {Resources}.create();");
+                    await context.EmitLine($"{DataBuffer}.write(handle);");
+                    await context.EmitLine($"return handle;");
+                },
+                modifyReadFunc: async (context, defaultRead, entry) => {
+                    await context.EmitLine($"auto handle = {DataBuffer}.read<{ResourceHandleType}>();");
+                    await context.EmitLine($"auto& {ResourceType.ToLower()} = *{Resources}.get(handle);");
+                    await context.EmitLine($"glGenTextures(1, &{ResourceType.ToLower()});");
+                }
+            );
 
             foreach (var kv in overrides.Parser.Functions)
             {

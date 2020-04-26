@@ -37,19 +37,6 @@ namespace GLThreadGen.Overrides
                 }
             );
 
-            overrides.RegisterOverride("glUseProgram",
-                overrideEntry: (fn) => {
-                    fn.Type.Arguments[0].Type = ResourceHandleType;
-                }
-            );
-
-            overrides.RegisterOverride("glAttachShader",
-                overrideEntry: (fn) => {
-                    fn.Type.Arguments[0].Type = ResourceHandleType;
-                    fn.Type.Arguments[0].Type = ShaderOverrides.ResourceHandleType;
-                }
-            );
-
             foreach (var kv in overrides.Parser.Functions)
             {
                 if (kv.Key.StartsWith("glProgramUniform"))

@@ -79,11 +79,12 @@ namespace GLThreadGen
             {
                 var context = new CodegenContext(source);
                 await context.EmitLine("#include <gl_command_buffer.hpp>");
+                await context.EmitLine("#include <opengl_util.hpp>");
                 context.EmitLine();
 
                 await context.EmitLine("using namespace multigl;");
                 
-                await context.EmitLine("void CommandBuffer::ProcessCommands(ResourceManager& resourceManager)");
+                await context.EmitLine("void CommandBuffer::ProcessCommands()");
                 await context.EmitScope(async () =>
                 {
                     await context.EmitLine($"while({DataBuffer}.has_commands())");
@@ -115,8 +116,14 @@ namespace GLThreadGen
                                                 await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
                                             }
                                         }
+                                    };
+
+                                    if (overrideList == null || overrideList.Count == 0)
+                                    {
+                                        var args = function.Type.Arguments;
+                                        await defaultReadFunc();
                                         context.EmitIndent();
-                                        await context.Emit($"{function.Name}(");
+                                        await context.Emit($"GL_CHECK({function.Name}(");
 
                                         for (int i = 0; i < args.Count; ++i)
                                         {
@@ -128,12 +135,7 @@ namespace GLThreadGen
                                             }
                                         }
 
-                                        await context.EmitLineUnindented($");");
-                                    };
-
-                                    if (overrideList == null || overrideList.Count == 0)
-                                    {
-                                        await defaultReadFunc();
+                                        await context.EmitLineUnindented($"));");
                                     }
                                     else
                                     {
@@ -149,11 +151,26 @@ namespace GLThreadGen
 
                                         if (!hasRun)
                                         {
+                                            var args = function.Type.Arguments;
                                             await defaultReadFunc();
+                                            context.EmitIndent();
+                                            await context.Emit($"GL_CHECK({function.Name}(");
+
+                                            for (int i = 0; i < args.Count; ++i)
+                                            {
+                                                var arg = args[i];
+                                                await context.Emit($"{arg.Name}");
+                                                if (i < args.Count - 1)
+                                                {
+                                                    await context.Emit(", ");
+                                                }
+                                            }
+
+                                            await context.EmitLineUnindented($"));");
                                         }
                                     }
+                                    await context.EmitLine($"break;");
                                 });
-                                await context.EmitLine($"break;");
                             }
                         });
                     });
@@ -488,7 +505,7 @@ namespace multigl
                         context.EmitLine();
 
                         await context.EmitStructAccess("public");
-                        await context.EmitLine("void ProcessCommands(ResourceManager& resourceManager);");
+                        await context.EmitLine("void ProcessCommands();");
                         context.EmitLine();
 
                         await context.EmitStructAccess("private");

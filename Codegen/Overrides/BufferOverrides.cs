@@ -20,40 +20,40 @@ namespace GLThreadGen.Overrides
                 await context.EmitLine($"auto& {arg.Name} = *{Resources}.get({arg.Name}Handle);");
             });
 
-            overrides.RegisterOverride("glCreateBuffers",
+            overrides.RegisterOverride($"glCreate{ResourceType}s",
                 overrideEntry: (fn) => {
-                    fn.Name = "glCreateBuffer";
+                    fn.Name = "glCreate" + ResourceType;
                     fn.Type.Arguments.Clear();
                     fn.Type.ReturnType = ResourceHandleType;
                 },
                 modifyReadFunc: async (context, defaultRead, entry) => {
                     await context.EmitLine($"auto handle = {DataBuffer}.read<{ResourceHandleType}>();");
                     await context.EmitLine($"auto& target = *{Resources}.get(handle);");
-                    await context.EmitLine($"glCreateBuffers(1, &target);");
+                    await context.EmitLine($"glCreate{ResourceType}s(1, &target);");
                 },
                 modifyWriteFunc: async (context, defaultWrite, entry) => {
                     context.EmitLine();
                     await context.EmitLine($"auto handle = {Resources}.create();");
-                    await context.EmitLine($"m_Buffer.write<{ResourceHandleType}>(handle);");
+                    await context.EmitLine($"{DataBuffer}.write<{ResourceHandleType}>(handle);");
                     await context.EmitLine($"return handle;");
                 }
             );
 
-            overrides.RegisterOverride("glGenBuffers",
+            overrides.RegisterOverride($"glGen{ResourceType}s",
                 overrideEntry: (fn) => {
-                    fn.Name = "glGenBuffer";
+                    fn.Name = "glGen" + ResourceType;
                     fn.Type.Arguments.Clear();
                     fn.Type.ReturnType = ResourceHandleType;
                 },
                 modifyReadFunc: async (context, defaultRead, entry) => {
                     await context.EmitLine($"auto handle = {DataBuffer}.read<{ResourceHandleType}>();");
                     await context.EmitLine($"auto& target = *{Resources}.get(handle);");
-                    await context.EmitLine($"glGenBuffers(1, &target);");
+                    await context.EmitLine($"glGen{ResourceType}s(1, &target);");
                 },
                 modifyWriteFunc: async (context, defaultWrite, entry) => {
                     context.EmitLine();
-                    await context.EmitLine($"auto handle = {ResourceManager}.Buffers.create();");
-                    await context.EmitLine($"m_Buffer.write<{ResourceHandleType}>(handle);");
+                    await context.EmitLine($"auto handle = {Resources}.create();");
+                    await context.EmitLine($"{DataBuffer}.write<{ResourceHandleType}>(handle);");
                     await context.EmitLine($"return handle;");
                 }
             );
