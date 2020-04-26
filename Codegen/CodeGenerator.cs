@@ -377,7 +377,9 @@ namespace multigl
                 var context = new CodegenContext(header);
                 await context.EmitLine("#pragma once");
                 await context.EmitLine("#include <glad/glad.h>");
+                await context.EmitLine("#include \"gl_resource_manager.hpp\"");
                 await context.EmitLine("#include \"raw_rw_buffer.hpp\"");
+
                 context.EmitLine();
                 await context.EmitLine("namespace multigl");
                 await context.EmitLine("{");
