@@ -53,6 +53,19 @@ namespace GLThreadGen
             Task.WaitAll(GenerateSources(), GenerateHeaders());
         }
 
+        public void OpenDirectory()
+        {
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                var startinfo = new ProcessStartInfo();
+                startinfo.UseShellExecute = true;
+                startinfo.FileName = "explorer.exe";
+                startinfo.CreateNoWindow = true;
+                startinfo.Arguments = BaseDir;
+                Process.Start(startinfo);
+            }
+        }
+
         public FileStream CreateHeader(string name)
         {
             var path = Path.Combine(IncludeDir, name);
@@ -72,7 +85,12 @@ namespace GLThreadGen
             await Task.WhenAll(GenerateWriteSource(), GenerateReadSource());
         }
 
+        public async Task GenerateHeaders()
+        {
+            await Task.WhenAll(GenerateCommandBufferHeader(), GenerateEnumTypeHeader(), GenerateRWBuffer(), GenerateResourceManager(), GenerateSlotmap(), GenerateGLUtil());
+        }
 
+        #region Sources
         public async Task GenerateReadSource()
         {
             using (var source = CreateSourceFile("gl_command_buffer_read.cpp"))
@@ -268,12 +286,118 @@ namespace GLThreadGen
                 }
             }
         }
+        #endregion
 
-        public async Task GenerateHeaders()
+        #region Headers
+        public async Task GenerateEnumTypeHeader()
         {
-            await Task.WhenAll(GenerateCommandBufferHeader(), GenerateEnumTypeHeader(), GenerateRWBuffer(), GenerateResourceManager(), GenerateSlotmap(), GenerateGLUtil());
+            string enumType = null;
+            int numValues = Parser.Functions.Count;
+            if (numValues < byte.MaxValue)
+            {
+                enumType = "uint8_t";
+            }
+            else if (numValues < ushort.MaxValue)
+            {
+                enumType = "uint16_t";
+            }
+            else if ((uint)numValues < uint.MaxValue)
+            {
+                enumType = "uint32_t";
+            }
+
+            using (var header = CreateHeader("gl_function_enums.hpp"))
+            {
+                var context = new CodegenContext(header);
+                await context.EmitLine("#pragma once");
+                await context.EmitLine("#include <stdint.h>");
+                context.EmitLine();
+
+                await context.EmitLine("namespace multigl");
+                await context.EmitScope(async ()=>
+                {
+
+                    await context.EmitLine($"typedef {enumType} gl_command_id_t;");
+                    await context.EmitLine("namespace CommandIdEnum");
+                    await context.EmitScope(async () =>
+                    {
+                        await context.EmitEnum("Enum : gl_command_id_t", async () =>
+                        {
+                            foreach (var v in Parser.Functions)
+                            {
+                                await context.EmitLine($"{v.Value.NoGLName},");
+                            }
+                            await context.EmitLine("Count");
+                        });
+                    });
+
+                    await context.EmitLine("typedef CommandIdEnum::Enum CommandId;");
+                });
+            }
         }
 
+        public async Task GenerateCommandBufferHeader()
+        {
+            using (var header = CreateHeader("gl_command_buffer.hpp"))
+            {
+                var context = new CodegenContext(header);
+                await context.EmitLine("#pragma once");
+                await context.EmitLine("#include <glad/glad.h>");
+                await context.EmitLine("#include \"gl_resource_manager.hpp\"");
+                await context.EmitLine("#include \"raw_rw_buffer.hpp\"");
+
+                context.EmitLine();
+                await context.EmitLine("namespace multigl");
+                await context.EmitScope(async () =>
+                {
+                    await context.EmitClass("CommandBuffer", async ()=>
+                    {
+                        await context.EmitStructAccess("public");
+                        await context.EmitLine("CommandBuffer(ResourceManager& manager);");
+                        await context.EmitLine("~CommandBuffer();");
+                        context.EmitLine();
+
+                        await context.EmitStructAccess("public");
+
+                        var accessTracker = context.CreateAccessTracker("public");
+                        foreach (var function in Parser.Functions.Values)
+                        {
+                            await accessTracker.WriteAccess(function.Access);
+
+                            var noGLName = function.NoGLName;
+                            context.EmitIndent();
+
+                            await context.Emit($"{function.Type.ReturnType} {noGLName}(");
+
+                            for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                            {
+                                var arg = function.Type.Arguments[i];
+                                await context.Emit($"{arg.Type} {arg.Name}");
+                                if (i < function.Type.Arguments.Count - 1)
+                                {
+                                    await context.Emit(", ");
+                                }
+                            }
+
+                            await context.EmitLineUnindented(");");
+                        }
+                        context.EmitLine();
+
+                        await context.EmitStructAccess("public");
+                        await context.EmitLine("void ProcessCommands();");
+                        context.EmitLine();
+
+                        await context.EmitStructAccess("private");
+                        await context.EmitLine($"ResourceManager& {ResourceManager};");
+                        await context.EmitLine($"raw_rw_buffer {DataBuffer};");
+
+                    });
+                });
+            }
+        }
+        #endregion
+
+        #region Static files
         public async Task GenerateGLUtil()
         {
             using (var header = CreateHeader("gl_utilities.hpp"))
@@ -951,124 +1075,6 @@ namespace multigl
             }
         }
 
-        public async Task GenerateEnumTypeHeader()
-        {
-            string enumType = null;
-            int numValues = Parser.Functions.Count;
-            if (numValues < byte.MaxValue)
-            {
-                enumType = "uint8_t";
-            }
-            else if (numValues < ushort.MaxValue)
-            {
-                enumType = "uint16_t";
-            }
-            else if ((uint)numValues < uint.MaxValue)
-            {
-                enumType = "uint32_t";
-            }
-
-            using (var header = CreateHeader("gl_function_enums.hpp"))
-            {
-                var context = new CodegenContext(header);
-                await context.EmitLine("#pragma once");
-                await context.EmitLine("#include <stdint.h>");
-                context.EmitLine();
-
-                await context.EmitLine("namespace multigl");
-                await context.EmitScope(async ()=>
-                {
-
-                    await context.EmitLine($"typedef {enumType} gl_command_id_t;");
-                    await context.EmitLine("namespace CommandIdEnum");
-                    await context.EmitScope(async () =>
-                    {
-                        await context.EmitEnum("Enum : gl_command_id_t", async () =>
-                        {
-                            foreach (var v in Parser.Functions)
-                            {
-                                await context.EmitLine($"{v.Value.NoGLName},");
-                            }
-                            await context.EmitLine("Count");
-                        });
-                    });
-
-                    await context.EmitLine("typedef CommandIdEnum::Enum CommandId;");
-                });
-            }
-        }
-
-        public async Task GenerateCommandBufferHeader()
-        {
-            using (var header = CreateHeader("gl_command_buffer.hpp"))
-            {
-                var context = new CodegenContext(header);
-                await context.EmitLine("#pragma once");
-                await context.EmitLine("#include <glad/glad.h>");
-                await context.EmitLine("#include \"gl_resource_manager.hpp\"");
-                await context.EmitLine("#include \"raw_rw_buffer.hpp\"");
-
-                context.EmitLine();
-                await context.EmitLine("namespace multigl");
-                await context.EmitScope(async () =>
-                {
-                    await context.EmitClass("CommandBuffer", async ()=>
-                    {
-                        await context.EmitStructAccess("public");
-                        await context.EmitLine("CommandBuffer(ResourceManager& manager);");
-                        await context.EmitLine("~CommandBuffer();");
-                        context.EmitLine();
-
-                        await context.EmitStructAccess("public");
-
-                        var accessTracker = context.CreateAccessTracker("public");
-                        foreach (var function in Parser.Functions.Values)
-                        {
-                            await accessTracker.WriteAccess(function.Access);
-
-                            var noGLName = function.NoGLName;
-                            context.EmitIndent();
-
-                            await context.Emit($"{function.Type.ReturnType} {noGLName}(");
-
-                            for (int i = 0; i < function.Type.Arguments.Count; ++i)
-                            {
-                                var arg = function.Type.Arguments[i];
-                                await context.Emit($"{arg.Type} {arg.Name}");
-                                if (i < function.Type.Arguments.Count - 1)
-                                {
-                                    await context.Emit(", ");
-                                }
-                            }
-
-                            await context.EmitLineUnindented(");");
-                        }
-                        context.EmitLine();
-
-                        await context.EmitStructAccess("public");
-                        await context.EmitLine("void ProcessCommands();");
-                        context.EmitLine();
-
-                        await context.EmitStructAccess("private");
-                        await context.EmitLine($"ResourceManager& {ResourceManager};");
-                        await context.EmitLine($"raw_rw_buffer {DataBuffer};");
-
-                    });
-                });
-            }
-        }
-
-        public void OpenDirectory()
-        {
-            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
-            {
-                var startinfo = new ProcessStartInfo();
-                startinfo.UseShellExecute = true;
-                startinfo.FileName = "explorer.exe";
-                startinfo.CreateNoWindow = true;
-                startinfo.Arguments = BaseDir;
-                Process.Start(startinfo);
-            }
-        }
+        #endregion
     }
 }
