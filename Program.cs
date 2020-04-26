@@ -64,14 +64,30 @@ namespace GLThreadGen
                 }
             }
 
-            HeaderParser parser = null;
+
+            GLADHeaderParser parser = null;
             using (var inStream = new FileStream(options.InputFile, FileMode.Open, FileAccess.Read))
             {
-                parser = new HeaderParser(inStream);
+                parser = new GLADHeaderParser(inStream);
                 parser.Parse();
             }
 
-            var generator = new CodeGenerator(options.OutDir, parser);
+            var tracker = new CodegenOverrideTracker(parser);
+            tracker.Initialize();
+
+            foreach(var func in parser.Functions.Values)
+            {
+                var list = tracker.GetOverrideList(func.Name);
+                if (list != null)
+                {
+                    foreach(var ovr in list)
+                    {
+                        ovr.ModifyFunctionEntry?.Invoke(func);
+                    }
+                }
+            }
+
+            var generator = new CodeGenerator(options.OutDir, parser, tracker);
             generator.Generate();
             //generator.OpenDirectory();
         }

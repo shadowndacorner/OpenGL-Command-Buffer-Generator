@@ -5,10 +5,10 @@ using System.Text;
 
 namespace GLThreadGen
 {
-	public class FunctionArgs
+	public class FunctionArgument
 	{
-		public FunctionArgs() { }
-		public FunctionArgs(string argString)
+		public FunctionArgument() { }
+		public FunctionArgument(string argString)
 		{
 			for(int i = argString.Length - 1; i >= 0; --i)
 			{
@@ -29,7 +29,7 @@ namespace GLThreadGen
 	{
 		public string TypedefName;
 		public string ReturnType;
-		public List<FunctionArgs> Arguments = new List<FunctionArgs>();
+		public List<FunctionArgument> Arguments = new List<FunctionArgument>();
 
 		public override string ToString()
 		{
@@ -74,6 +74,8 @@ namespace GLThreadGen
 				NoGLName = value.Substring("gl".Length);
 			}
 		}
+
+		public string Access { get; set; } = "public";
 		
 		public string NoGLName { get; private set; }
 
@@ -267,9 +269,9 @@ namespace GLThreadGen
 		}
 	}
 
-	public class HeaderParser
+	public class GLADHeaderParser
     {
-        public HeaderParser(FileStream fstream)
+        public GLADHeaderParser(FileStream fstream)
         {
             if (!fstream.CanRead)
             {
@@ -323,7 +325,7 @@ namespace GLThreadGen
 			while (!parser.IsSymbol(')'))
 			{
 				var argString = parser.ReadUntil(',', ')');
-				var arg = new FunctionArgs(argString);
+				var arg = new FunctionArgument(argString);
 				if (arg.Name != null && arg.Type != null && arg.Name.Length > 0 && arg.Type.Length > 0)
 					funcType.Arguments.Add(arg);
 
