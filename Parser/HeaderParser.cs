@@ -60,6 +60,29 @@ namespace GLThreadGen
 	public class FunctionEntry
 	{
 		public FunctionDeclaration Type;
+		public bool ReturnsHandle
+		{
+			get
+			{
+				return Type.ReturnType.EndsWith("Handle");
+			}
+		}
+
+		public bool Returns
+		{
+			get
+			{
+				return Type.ReturnType != "void";
+			}
+		}
+
+		public bool ShouldReturnAsFinalArgPointer
+		{
+			get
+			{
+				return Returns && !ReturnsHandle;
+			}
+		}
 		
 		private string _name;
 		public string Name

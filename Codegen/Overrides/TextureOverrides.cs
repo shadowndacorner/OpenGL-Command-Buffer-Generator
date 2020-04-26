@@ -32,7 +32,7 @@ namespace GLThreadGen.Overrides
                     context.EmitLine();
                     var arg = entry.Type.Arguments[0];
                     await context.EmitLine($"{DataBuffer}.write({arg.Name});");
-                    await context.EmitLine($"auto handle = {Resources}.create();");
+                    await context.EmitLine($"auto handle = {Resources}.create(0);");
                     await context.EmitLine($"{DataBuffer}.write(handle);");
                     await context.EmitLine($"return handle;");
                 },
@@ -55,7 +55,7 @@ namespace GLThreadGen.Overrides
                 },
                 modifyWriteFunc: async (context, defaultWrite, entry) => {
                     context.EmitLine();
-                    await context.EmitLine($"auto handle = {Resources}.create();");
+                    await context.EmitLine($"auto handle = {Resources}.create(0);");
                     await context.EmitLine($"{DataBuffer}.write(handle);");
                     await context.EmitLine($"return handle;");
                 },

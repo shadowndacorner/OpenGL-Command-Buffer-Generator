@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
@@ -11,6 +12,9 @@ namespace GLThreadGen
     {
         public const string DataBuffer = "m_Buffer";
         public const string ResourceManager = "m_ResourceManager";
+
+        public const string CommandBufferClass = "CommandBuffer";
+        public const string ImmediateBufferClass = "ImmediateCommandBuffer";
 
         public string BaseDir { get; private set; }
         public string IncludeDir { get; private set; }
@@ -50,6 +54,7 @@ namespace GLThreadGen
         public void Generate()
         {
             InitDirectories();
+            PopulateLists();
             Task.WaitAll(GenerateSources(), GenerateHeaders());
         }
 
@@ -80,29 +85,62 @@ namespace GLThreadGen
             return new FileStream(path, FileMode.Create, FileAccess.Write);
         }
 
+        public void PopulateLists()
+        {
+            MainBufferFunctions.Clear();
+            ImmediateBufferFunctions.Clear();
+
+            foreach(var v in Parser.Functions)
+            {
+                if (!v.Value.Returns)
+                {
+                    MainBufferFunctions.Add(v);
+                }
+                else
+                {
+                    if (v.Value.ReturnsHandle)
+                    {
+                        MainBufferFunctions.Add(v);
+                    }
+                    ImmediateBufferFunctions.Add(v);
+                }
+            }
+        }
+
+        public List<KeyValuePair<string, FunctionEntry>> MainBufferFunctions = new List<KeyValuePair<string, FunctionEntry>>();
+        public List<KeyValuePair<string, FunctionEntry>> ImmediateBufferFunctions = new List<KeyValuePair<string, FunctionEntry>>();
+
         public async Task GenerateSources()
         {
-            await Task.WhenAll(GenerateWriteSource(), GenerateReadSource());
+            await Task.WhenAll(
+                GenerateCommandBufferWriteSource(CommandBufferClass, "gl_command_buffer_write.cpp", MainBufferFunctions), GenerateCommandBufferReadSource(CommandBufferClass, "gl_command_buffer_read.cpp", MainBufferFunctions),
+                GenerateCommandBufferWriteSource(ImmediateBufferClass, "gl_immediate_buffer_write.cpp", ImmediateBufferFunctions), GenerateCommandBufferReadSource(ImmediateBufferClass, "gl_immediate_buffer_read.cpp", ImmediateBufferFunctions)
+            );
         }
 
         public async Task GenerateHeaders()
         {
-            await Task.WhenAll(GenerateCommandBufferHeader(), GenerateEnumTypeHeader(), GenerateRWBuffer(), GenerateResourceManager(), GenerateSlotmap(), GenerateGLUtil());
+            await Task.WhenAll
+            (
+                GenerateCommandBufferHeader(CommandBufferClass, "gl_command_buffer.hpp", MainBufferFunctions), GenerateCommandBufferHeader(ImmediateBufferClass, "gl_immediate_buffer.hpp", ImmediateBufferFunctions),
+                GenerateEnumTypeHeader(),
+                GenerateRWBuffer(), GenerateResourceManager(), GenerateSlotmap(), GenerateGLUtil()
+            );
         }
 
         #region Sources
-        public async Task GenerateReadSource()
+        public async Task GenerateCommandBufferReadSource(string bufferClass, string fileName, List<KeyValuePair<string, FunctionEntry>> functionList)
         {
-            using (var source = CreateSourceFile("gl_command_buffer_read.cpp"))
+            using (var source = CreateSourceFile(fileName))
             {
                 var context = new CodegenContext(source);
-                await context.EmitLine("#include <gl_command_buffer.hpp>");
+                await context.EmitLine($"#include <{(bufferClass == CommandBufferClass ? "gl_command_buffer.hpp" : "gl_immediate_buffer.hpp")}>");
                 await context.EmitLine("#include <gl_utilities.hpp>");
                 context.EmitLine();
 
                 await context.EmitLine("using namespace multigl;");
                 
-                await context.EmitLine("void CommandBuffer::ProcessCommands()");
+                await context.EmitLine($"void {bufferClass}::ProcessCommands()");
                 await context.EmitScope(async () =>
                 {
                     await context.EmitLine($"while({DataBuffer}.has_commands())");
@@ -112,7 +150,7 @@ namespace GLThreadGen
                         await context.EmitLine("switch(cmd)");
                         await context.EmitScope(async () =>
                         {
-                            foreach(var fk in Parser.Functions)
+                            foreach(var fk in functionList)
                             {
                                 var overrideList = Tracker.GetOverrideList(fk.Key);
                                 var function = fk.Value;
@@ -120,19 +158,58 @@ namespace GLThreadGen
                                 await context.EmitScope(async () => {
                                     Func<Task> defaultReadFunc = async () =>
                                     {
-                                        var args = function.Type.Arguments;
-                                        for (int i = 0; i < args.Count; ++i)
+                                        if (!function.ShouldReturnAsFinalArgPointer)
                                         {
-                                            var arg = args[i];
-                                            var argReadOverride = Tracker.GetArgumentTypeReadOverride(arg.Type);
-                                            if (argReadOverride != null)
+                                            var args = function.Type.Arguments;
+                                            for (int i = 0; i < args.Count; ++i)
                                             {
-                                                await argReadOverride(context, function, arg);
+                                                var arg = args[i];
+                                                var argReadOverride = Tracker.GetArgumentTypeReadOverride(arg.Type);
+                                                if (argReadOverride != null)
+                                                {
+                                                    await argReadOverride(context, function, arg);
+                                                }
+                                                else
+                                                {
+                                                    await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
+                                                }
                                             }
-                                            else
+                                        }
+                                        else
+                                        {
+                                            var args = function.Type.Arguments;
+                                            for (int i = 0; i < args.Count; ++i)
                                             {
-                                                await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
+                                                var arg = args[i];
+                                                var argReadOverride = Tracker.GetArgumentTypeReadOverride(arg.Type);
+                                                if (argReadOverride != null)
+                                                {
+                                                    await argReadOverride(context, function, arg);
+                                                }
+                                                else
+                                                {
+                                                    await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
+                                                }
                                             }
+                                            await context.EmitLine($"auto returnVal = {DataBuffer}.read<{function.Type.ReturnType}*>();");
+                                            await context.EmitLine("if (returnVal)");
+                                            await context.EmitScope(async () => {
+                                                context.EmitIndent();
+
+                                                await context.Emit($"GL_CHECK(*returnVal = {function.Name}(");
+                                                for (int i = 0; i < args.Count; ++i)
+                                                {
+                                                    var arg = args[i];
+                                                    await context.Emit($"{arg.Name}");
+                                                    if (i < args.Count - 1)
+                                                    {
+                                                        await context.Emit(", ");
+                                                    }
+                                                }
+
+                                                await context.EmitLineUnindented($"));");
+                                                await context.EmitLine("return;");
+                                            });
                                         }
                                     };
 
@@ -197,45 +274,109 @@ namespace GLThreadGen
             }
         }
 
-        public async Task GenerateWriteSource()
+        public async Task GenerateCommandBufferWriteSource(string bufferClass, string fileName, List<KeyValuePair<string, FunctionEntry>> functionList)
         {
-            using (var source = CreateSourceFile("gl_command_buffer_write.cpp"))
+            using (var source = CreateSourceFile(fileName))
             {
                 var context = new CodegenContext(source);
-                await context.EmitLine("#include <gl_command_buffer.hpp>");
+                await context.EmitLine($"#include <{(bufferClass == CommandBufferClass ? "gl_command_buffer.hpp" : "gl_immediate_buffer.hpp")}>");
                 context.EmitLine();
 
                 await context.EmitLine("using namespace multigl;");
 
-                await context.EmitLine($"CommandBuffer::CommandBuffer(ResourceManager& mgr) : {ResourceManager}(mgr) {{}}");
-                await context.EmitLine($"CommandBuffer::~CommandBuffer(){{}}");
+                await context.EmitLine($"{bufferClass}::{bufferClass}(ResourceManager& mgr) : {ResourceManager}(mgr)");
+                if (bufferClass == ImmediateBufferClass)
+                {
+                    ++context.IndentLevel;
+                    await context.EmitLine(", m_HasSubmittedWork(false)");
+                    --context.IndentLevel;
+                }
+                await context.EmitScope(()=> {});
+                context.EmitLine();
+                if (bufferClass == ImmediateBufferClass)
+                {
+                    await context.EmitLine($"{bufferClass}::~{bufferClass}()");
+                    await context.EmitScope(async () => {
+                        await context.EmitLine("if (!m_HasSubmittedWork)");
+                        await context.EmitScope(async () => {
+                            await context.EmitLine("// TODO: Submit queue to main thread");
+                        });
+                        await context.EmitLine("// TODO: Wait on job system task here");
+                    });
+                }
+                else
+                {
+                    await context.EmitLine($"{bufferClass}::~{bufferClass}(){{}}");
+                }
+
                 context.EmitLine();
 
-                foreach (var fk in Parser.Functions)
+                foreach (var fk in functionList)
                 {
                     var overrideList = Tracker.GetOverrideList(fk.Key);
                     var function = fk.Value;
 
                     var noGLName = function.NoGLName;
-                    await context.Emit($"{function.Type.ReturnType} CommandBuffer::{noGLName}(");
 
-                    for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                    if (!function.ShouldReturnAsFinalArgPointer)
                     {
-                        var arg = function.Type.Arguments[i];
-                        await context.Emit($"{arg.Type} {arg.Name}");
-                        if (i < function.Type.Arguments.Count - 1)
+                        await context.Emit($"{function.Type.ReturnType} {bufferClass}::{noGLName}(");
+
+                        for (int i = 0; i < function.Type.Arguments.Count; ++i)
                         {
+                            var arg = function.Type.Arguments[i];
+                            await context.Emit($"{arg.Type} {arg.Name}");
+                            if (i < function.Type.Arguments.Count - 1)
+                            {
+                                await context.Emit(", ");
+                            }
+                        }
+                        await context.EmitLineUnindented(")");
+                    }
+                    else
+                    {
+                        await context.Emit($"void {bufferClass}::{noGLName}(");
+                        for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                        {
+                            var arg = function.Type.Arguments[i];
+                            await context.Emit($"{arg.Type} {arg.Name}");
                             await context.Emit(", ");
                         }
+                        await context.Emit($"{function.Type.ReturnType}* returnVal");
+                        await context.EmitLineUnindented(")");
                     }
-                    await context.EmitLineUnindented(")");
 
                     await context.EmitScope(async () =>
                     {
                         await context.EmitLine($"{DataBuffer}.write_command(CommandId::{function.NoGLName});");
                         Func<Task> defaultWriteFunc = async () =>
                         {
-                            if (function.Type.ReturnType == "void")
+                            if (!function.ShouldReturnAsFinalArgPointer)
+                            {
+                                if (function.Type.ReturnType == "void")
+                                {
+                                    for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                                    {
+                                        var arg = function.Type.Arguments[i];
+                                        var argWriteOverride = Tracker.GetArgumentTypeWriteOverride(arg.Type);
+                                        if (argWriteOverride != null)
+                                        {
+                                            await argWriteOverride(context, function, arg);
+                                        }
+                                        else
+                                        {
+                                            await context.EmitLine($"{DataBuffer}.write({arg.Name});");
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    await context.EmitLine($"#if defined(MGL_STRICT_COMPILATION)");
+                                    await context.EmitLine($"#error Unimplemented function with return value");
+                                    await context.EmitLine($"#endif");
+                                }
+                            }
+                            else
                             {
                                 for (int i = 0; i < function.Type.Arguments.Count; ++i)
                                 {
@@ -250,13 +391,7 @@ namespace GLThreadGen
                                         await context.EmitLine($"{DataBuffer}.write({arg.Name});");
                                     }
                                 }
-                            }
-                            else
-                            {
-                                await context.EmitLine($"#if defined(MGL_STRICT_COMPILATION)");
-                                await context.EmitLine($"#error Unimplemented function with return value");
-                                await context.EmitLine($"#endif");
-                                await context.EmitLine($"return 0;");
+                                await context.EmitLine($"{DataBuffer}.write(returnVal);");
                             }
                         };
 
@@ -316,7 +451,6 @@ namespace GLThreadGen
                 await context.EmitLine("namespace multigl");
                 await context.EmitScope(async ()=>
                 {
-
                     await context.EmitLine($"typedef {enumType} gl_command_id_t;");
                     await context.EmitLine("namespace CommandIdEnum");
                     await context.EmitScope(async () =>
@@ -336,9 +470,9 @@ namespace GLThreadGen
             }
         }
 
-        public async Task GenerateCommandBufferHeader()
+        public async Task GenerateCommandBufferHeader(string bufferClass, string fileName, List<KeyValuePair<string, FunctionEntry>> functionList)
         {
-            using (var header = CreateHeader("gl_command_buffer.hpp"))
+            using (var header = CreateHeader(fileName))
             {
                 var context = new CodegenContext(header);
                 await context.EmitLine("#pragma once");
@@ -350,36 +484,52 @@ namespace GLThreadGen
                 await context.EmitLine("namespace multigl");
                 await context.EmitScope(async () =>
                 {
-                    await context.EmitClass("CommandBuffer", async ()=>
+                    await context.EmitClass(bufferClass, async () =>
                     {
                         await context.EmitStructAccess("public");
-                        await context.EmitLine("CommandBuffer(ResourceManager& manager);");
-                        await context.EmitLine("~CommandBuffer();");
+                        await context.EmitLine($"{bufferClass}(ResourceManager& manager);");
+                        await context.EmitLine($"~{bufferClass}();");
                         context.EmitLine();
 
                         await context.EmitStructAccess("public");
 
                         var accessTracker = context.CreateAccessTracker("public");
-                        foreach (var function in Parser.Functions.Values)
+                        foreach (var fk in functionList)
                         {
+                            var function = fk.Value;
                             await accessTracker.WriteAccess(function.Access);
 
                             var noGLName = function.NoGLName;
-                            context.EmitIndent();
 
-                            await context.Emit($"{function.Type.ReturnType} {noGLName}(");
-
-                            for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                            if (!function.ShouldReturnAsFinalArgPointer)
                             {
-                                var arg = function.Type.Arguments[i];
-                                await context.Emit($"{arg.Type} {arg.Name}");
-                                if (i < function.Type.Arguments.Count - 1)
+                                context.EmitIndent();
+                                await context.Emit($"{function.Type.ReturnType} {noGLName}(");
+                                for (int i = 0; i < function.Type.Arguments.Count; ++i)
                                 {
+                                    var arg = function.Type.Arguments[i];
+                                    await context.Emit($"{arg.Type} {arg.Name}");
+                                    if (i < function.Type.Arguments.Count - 1)
+                                    {
+                                        await context.Emit(", ");
+                                    }
+                                }
+                                await context.EmitLineUnindented(");");
+                            }
+                            else
+                            {
+                                context.EmitIndent();
+                                await context.Emit($"void {noGLName}(");
+                                for (int i = 0; i < function.Type.Arguments.Count; ++i)
+                                {
+                                    var arg = function.Type.Arguments[i];
+                                    await context.Emit($"{arg.Type} {arg.Name}");
                                     await context.Emit(", ");
                                 }
+                                await context.Emit($"{function.Type.ReturnType}* returnVal = 0");
+                                await context.EmitLineUnindented(");");
                             }
 
-                            await context.EmitLineUnindented(");");
                         }
                         context.EmitLine();
 
@@ -390,6 +540,10 @@ namespace GLThreadGen
                         await context.EmitStructAccess("private");
                         await context.EmitLine($"ResourceManager& {ResourceManager};");
                         await context.EmitLine($"raw_rw_buffer {DataBuffer};");
+                        if (bufferClass == ImmediateBufferClass)
+                        {
+                            await context.EmitLine("bool m_HasSubmittedWork;");
+                        }
 
                     });
                 });

@@ -32,7 +32,7 @@ namespace GLThreadGen.Overrides
                 },
                 modifyWriteFunc: async (context, defaultWrite, entry) => {
                     context.EmitLine();
-                    await context.EmitLine($"auto handle = {Resources}.create();");
+                    await context.EmitLine($"auto handle = {Resources}.create(0);");
                     await context.EmitLine($"{DataBuffer}.write(handle);");
                     await EmitArgumentWrites(context, entry);
 
