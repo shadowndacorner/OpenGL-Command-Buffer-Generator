@@ -79,7 +79,7 @@ namespace GLThreadGen
             {
                 var context = new CodegenContext(source);
                 await context.EmitLine("#include <gl_command_buffer.hpp>");
-                await context.EmitLine("#include <opengl_util.hpp>");
+                await context.EmitLine("#include <gl_utilities.hpp>");
                 context.EmitLine();
 
                 await context.EmitLine("using namespace multigl;");
@@ -276,7 +276,7 @@ namespace GLThreadGen
 
         public async Task GenerateGLUtil()
         {
-            using (var header = CreateHeader("opengl_util.hpp"))
+            using (var header = CreateHeader("gl_utilities.hpp"))
             {
                 using (var writer = new StreamWriter(header))
                 {
@@ -350,22 +350,7 @@ inline void CheckGLError()
 #define GL_CHECK(func) \
 	func;              \
 	CheckGLError()
-/*
-inline GLenum enum_convert(blade::graphics::BufferUsage usage)
-{
-	using namespace blade::graphics;
-	switch (usage)
-	{
-		case BufferUsage::DynamicDraw:
-			return GL_DYNAMIC_DRAW;
-		case BufferUsage::StreamDraw:
-			return GL_STREAM_DRAW;
-		case BufferUsage::StaticDraw:
-			return GL_STATIC_DRAW;
-	}
-	BLADE_FATAL_ERROR(""Invalid BufferUsage enum"");
-	return 0;
-}*/
+
 ");
                 }
             }
