@@ -54,7 +54,7 @@ namespace GLThreadGen
         {
             var path = Path.Combine(IncludeDir, name);
             Console.WriteLine($"Creating file {path}...");
-            return new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write);
+            return new FileStream(path, FileMode.Create, FileAccess.Write);
         }
 
         public FileStream CreateSourceFile(string name)
