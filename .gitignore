@@ -1,0 +1,9 @@
+# IDEs
+.vs
+.vscode
+.local
+
+# .NET
+bin
+obj
+*.csproj.user
