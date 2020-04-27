@@ -1167,7 +1167,11 @@ namespace multigl
     class raw_rw_buffer
     {
     public:
-        inline raw_rw_buffer() : m_WriteIdx(0), m_ReadIdx(0) { }
+        inline raw_rw_buffer() : m_WriteIdx(0), m_ReadIdx(0)
+        {
+            m_Buffer.reserve(512);
+        }
+
         inline ~raw_rw_buffer() { }
     
     public:
@@ -1188,8 +1192,8 @@ namespace multigl
         inline void write(const T& val)
         {
             auto align = alignof(T);
-            auto mod = m_WriteIdx % align;
-            if (mod == 0)
+            auto mod = align - m_WriteIdx % align;
+            if (mod == align)
             {
                 ensure_write_capacity(sizeof(T));
             }
@@ -1208,7 +1212,7 @@ namespace multigl
             auto tgCapacity = m_WriteIdx + amount;
             if (m_Buffer.capacity() < tgCapacity)
             {
-                m_Buffer.reserve(tgCapacity);
+                m_Buffer.reserve(size_t(double(tgCapacity) * 2));
             }
         }
 
@@ -1242,8 +1246,8 @@ namespace multigl
         inline T read()
         {
             auto align = alignof(T);
-            auto mod = m_ReadIdx % align;
-            if (mod != 0)
+            auto mod = align - m_ReadIdx % align;
+            if (mod != align)
             {
                 read_padding(mod);
             }
@@ -1265,7 +1269,7 @@ namespace multigl
             return *(reinterpret_cast<T*>(&m_Buffer[old]));
         }
 
-        private:
+    private:
         std::vector<char> m_Buffer;
         size_t m_WriteIdx;
         size_t m_ReadIdx;
