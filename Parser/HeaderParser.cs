@@ -5,125 +5,6 @@ using System.Text;
 
 namespace GLThreadGen
 {
-	public class FunctionArgument
-	{
-		public FunctionArgument() { }
-		public FunctionArgument(string argString)
-		{
-			for(int i = argString.Length - 1; i >= 0; --i)
-			{
-				if (!LineParser.IsValidIdentifierCharacter(argString[i]))
-				{
-					Type = argString.Substring(0, i + 1).Trim();
-					Name = argString.Substring(i + 1).Trim();
-					return;
-				}
-			}
-		}
-
-		public string Type;
-		public string Name;
-	}
-
-	public class FunctionDeclaration
-	{
-		public string TypedefName;
-		public string ReturnType;
-		public List<FunctionArgument> Arguments = new List<FunctionArgument>();
-
-		public override string ToString()
-		{
-			var build = new StringBuilder(ReturnType);
-			build.Append(" ");
-			build.Append(TypedefName);
-			build.Append(" (");
-			for (int i = 0; i < Arguments.Count; ++i)
-			{
-				var arg = Arguments[i];
-				build.Append('(');
-				build.Append(arg.Type);
-				build.Append(')');
-				build.Append(' ');
-				build.Append('[');
-				build.Append(arg.Name);
-				build.Append(']');
-				if (i < Arguments.Count - 1)
-				{
-					build.Append(", ");
-				}
-			}
-			build.Append(")");
-			return build.ToString();
-		}
-	}
-
-	public class FunctionEntry
-	{
-		public FunctionDeclaration Type;
-		public bool ReturnsHandle
-		{
-			get
-			{
-				return Type.ReturnType.EndsWith("Handle");
-			}
-		}
-
-		public bool Returns
-		{
-			get
-			{
-				return Type.ReturnType != "void";
-			}
-		}
-
-		public bool ShouldReturnAsFinalArgPointer
-		{
-			get
-			{
-				return Returns && !ReturnsHandle;
-			}
-		}
-		
-		private string _name;
-		public string Name
-		{
-			get
-			{
-				return _name;
-			}
-			set
-			{
-				_name = value;
-				NoGLName = value.Substring("gl".Length);
-			}
-		}
-
-		public string Access { get; set; } = "public";
-		
-		public string NoGLName { get; private set; }
-
-		public override string ToString()
-		{
-			var build = new StringBuilder(Type.ReturnType);
-			build.Append(" ");
-			build.Append(Name);
-			build.Append(" (");
-			for (int i = 0; i < Type.Arguments.Count; ++i)
-			{
-				var arg = Type.Arguments[i];
-				build.Append(arg.Type);
-				build.Append(' ');
-				build.Append(arg.Name);
-				if (i < Type.Arguments.Count - 1)
-				{
-					build.Append(", ");
-				}
-			}
-			build.Append(")");
-			return build.ToString();
-		}
-	}
-
 	public struct LineParser
 	{
 		public LineParser(string l, int lNum)
@@ -242,9 +123,9 @@ namespace GLThreadGen
 			int start = CurIdx;
 			int len = 1;
 			char c = ReadChar();
-			if (!IsAlpha(c))
+			if (!IsAlpha(c) && c != '_')
 			{
-				throw new ArgumentException("Invalid token");
+				throw new ArgumentException("Invalid token - got char " + c + " for line " + Line);
 			}
 
 			while (!IsEOF())
@@ -294,19 +175,36 @@ namespace GLThreadGen
 
 	public class GLADHeaderParser
     {
-        public GLADHeaderParser(FileStream fstream)
+        public GLADHeaderParser(Stream stream, GLDataRegistry registry)
         {
-            if (!fstream.CanRead)
+            if (!stream.CanRead)
             {
-                throw new ArgumentException("File stream must be readable");
+                throw new ArgumentException("Input stream must be readable");
             }
 
-            Stream = fstream;
+            Stream = stream;
+			Registry = registry;
         }
 
-        public FileStream Stream { get; private set; }
-		public Dictionary<string, FunctionDeclaration> FunctionTypes = new Dictionary<string, FunctionDeclaration>();
-		public Dictionary<string, FunctionEntry> Functions = new Dictionary<string, FunctionEntry>();
+		public GLDataRegistry Registry { get; private set; }
+
+        public Stream Stream { get; private set; }
+		public Dictionary<string, FunctionDeclaration> FunctionTypes
+		{
+			get
+
+			{
+				return Registry.FunctionTypes;
+			}
+		}
+
+		public Dictionary<string, FunctionEntry> Functions
+		{
+			get
+			{
+				return Registry.Functions;
+			}
+		}
 
 		private FunctionDeclaration ReadFuncType(string line, int curLine)
 		{
@@ -367,13 +265,22 @@ namespace GLThreadGen
 				while (!reader.EndOfStream)
 				{
 					var line = reader.ReadLine();
-					if (line.StartsWith("typedef") && line.Contains("APIENTRYP PFN"))
+					if (line.StartsWith("#define"))
 					{
-						var read = ReadFuncType(line, curLine);
-						//if (read != null)
+						var parser = new LineParser(line, curLine);
+						parser.IsSymbol('#');
+						if (parser.ReadToken() != "define")
 						{
-							//Console.WriteLine(read);
+							throw new Exception("Invalid definition");
 						}
+						
+						var def = parser.ReadToken();
+						if (!Registry.Defines.Contains(def))
+							Registry.Defines.Add(def);
+					}
+					else if (line.StartsWith("typedef") && line.Contains("APIENTRYP PFN"))
+					{
+						ReadFuncType(line, curLine);
 					}
 					else if (line.StartsWith("GLAPI PFN"))
 					{

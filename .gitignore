@@ -7,3 +7,6 @@
 bin
 obj
 *.csproj.user
+
+
+Properties/launchSettings.json

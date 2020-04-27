@@ -61,6 +61,11 @@ namespace GLThreadGen
             await EmitLineUnindented(line);
         }
 
+        public void EmitLineUnindented()
+        {
+            Stream.WriteByte((byte)'\n');
+        }
+
         public async Task EmitLineUnindented(string line)
         {
             var byteArray = Encoding.ASCII.GetBytes(line);

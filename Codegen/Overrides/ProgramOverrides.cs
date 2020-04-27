@@ -37,7 +37,7 @@ namespace GLThreadGen.Overrides
                 }
             );
 
-            foreach (var kv in overrides.Parser.Functions)
+            foreach (var kv in overrides.Registry.Functions)
             {
                 if (kv.Key.StartsWith("glProgramUniform"))
                 {

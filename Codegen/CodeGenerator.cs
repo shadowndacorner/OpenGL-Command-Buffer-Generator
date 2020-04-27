@@ -20,14 +20,14 @@ namespace GLThreadGen
         public string IncludeDir { get; private set; }
         public string SourceDir { get; private set; }
 
-        public GLADHeaderParser Parser { get; private set; }
+        public GLDataRegistry Registry { get; private set; }
         public CodegenOverrideTracker Tracker { get; private set; }
 
-        public CodeGenerator(string baseDirectory, GLADHeaderParser parser, CodegenOverrideTracker tracker)
+        public CodeGenerator(string baseDirectory, GLDataRegistry registry, CodegenOverrideTracker tracker)
         {
             Tracker = tracker;
             BaseDir = baseDirectory;
-            Parser = parser;
+            Registry = registry;
 
             IncludeDir = Path.Combine(BaseDir, "include");
             SourceDir = Path.Combine(BaseDir, "src");
@@ -90,7 +90,7 @@ namespace GLThreadGen
             MainBufferFunctions.Clear();
             ImmediateBufferFunctions.Clear();
 
-            foreach(var v in Parser.Functions)
+            foreach(var v in Registry.Functions)
             {
                 if (!v.Value.Returns)
                 {
@@ -427,7 +427,7 @@ namespace GLThreadGen
         public async Task GenerateEnumTypeHeader()
         {
             string enumType = null;
-            int numValues = Parser.Functions.Count;
+            int numValues = Registry.Functions.Count;
             if (numValues < byte.MaxValue)
             {
                 enumType = "uint8_t";
@@ -446,6 +446,10 @@ namespace GLThreadGen
                 var context = new CodegenContext(header);
                 await context.EmitLine("#pragma once");
                 await context.EmitLine("#include <stdint.h>");
+                if (Registry.EnumTypes.Count > 0)
+                {
+                    await context.EmitLine("#include <glad/glad.h>");
+                }
                 context.EmitLine();
 
                 await context.EmitLine("namespace multigl");
@@ -457,15 +461,38 @@ namespace GLThreadGen
                     {
                         await context.EmitEnum("Enum : gl_command_id_t", async () =>
                         {
-                            foreach (var v in Parser.Functions)
+                            foreach (var v in Registry.Functions)
                             {
                                 await context.EmitLine($"{v.Value.NoGLName},");
                             }
                             await context.EmitLine("Count");
                         });
                     });
-
                     await context.EmitLine("typedef CommandIdEnum::Enum CommandId;");
+
+                    foreach(var enumType in Registry.EnumTypes)
+                    {
+                        context.EmitLine();
+                        await context.EmitLine($"namespace {enumType.Value.Name}Enum");
+                        await context.EmitScope(async () => {
+                            await context.EmitEnum("Enum : GLenum", async ()=> {
+                                int cur = 0;
+                                int cnt = enumType.Value.Values.Count;
+                                foreach(var v in enumType.Value.Values)
+                                {
+                                    context.EmitIndent();
+                                    await context.Emit($"{v.Key} = {v.Value}");
+                                    ++cur;
+                                    if (cur < cnt)
+                                    {
+                                        await context.Emit(",");
+                                    }
+                                    context.EmitLineUnindented();
+                                }
+                            });
+                        });
+                        await context.EmitLine($"typedef {enumType.Value.Name}Enum::Enum {enumType.Value.Name};");
+                    }
                 });
             }
         }
@@ -479,6 +506,10 @@ namespace GLThreadGen
                 await context.EmitLine("#include <glad/glad.h>");
                 await context.EmitLine("#include \"gl_resource_manager.hpp\"");
                 await context.EmitLine("#include \"raw_rw_buffer.hpp\"");
+                if (Registry.EnumTypes.Count > 0)
+                {
+                    await context.EmitLine("#include \"gl_function_enums.hpp\"");
+                }
 
                 context.EmitLine();
                 await context.EmitLine("namespace multigl");

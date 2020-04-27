@@ -6,12 +6,12 @@ namespace GLThreadGen
 {
     public class CodegenOverrideTracker
     {
-        public CodegenOverrideTracker(GLADHeaderParser parser)
+        public CodegenOverrideTracker(GLDataRegistry registry)
         {
-            Parser = parser;
+            Registry = registry;
         }
 
-        public GLADHeaderParser Parser { get; private set; }
+        public GLDataRegistry Registry { get; private set; }
 
         public class OverrideMethods
         {
