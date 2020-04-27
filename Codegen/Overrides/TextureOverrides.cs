@@ -66,6 +66,19 @@ namespace GLThreadGen.Overrides
                 }
             );
 
+            overrides.RegisterOverride("glActiveTexture",
+                overrideEntry: (fn) => {
+                    var args = fn.Type.Arguments;
+                    args[0].Name = "textureSlot";
+                    args[0].Type = "GLuint";
+                    args[0].IsEnumType = false;
+                },
+                modifyReadFunc: async (context, defaultRead, entry) => {
+                    await defaultRead();
+                    await context.EmitLine("GL_CHECK(glActiveTexture(GL_TEXTURE0 + textureSlot));");
+                }
+            );
+
             foreach (var kv in overrides.Registry.Functions)
             {
                 foreach (var arg in kv.Value.Type.Arguments)

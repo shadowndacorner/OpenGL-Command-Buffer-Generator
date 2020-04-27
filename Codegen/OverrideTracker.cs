@@ -20,8 +20,10 @@ namespace GLThreadGen
             public Func<CodegenContext, Func<Task>, FunctionEntry, Task> ModifyReadFunction;
         }
 
-        public void Initialize()
+        public OpenGL_XML_Specification.Registry XMLRegistry { get; private set; }
+        public void Initialize(OpenGL_XML_Specification.Registry xmlRegistry)
         {
+            XMLRegistry = xmlRegistry;
             foreach(var type in GetType().Assembly.ExportedTypes)
             {
                 if (type != typeof(Overrides.GLOverride) && typeof(Overrides.GLOverride).IsAssignableFrom(type))

@@ -23,6 +23,7 @@ namespace GLThreadGen
         }
 
 		public GLDataRegistry Registry { get; private set; }
+        public Registry XMLRegistry { get; private set; }
 
         private readonly static Dictionary<string, string> _HardcodedPascalReplacements = new Dictionary<string, string>{
             {"Srgb", "SRGB"},
@@ -117,6 +118,7 @@ namespace GLThreadGen
             {
                 throw new XmlException("Failed to deserialize object");
             }
+            XMLRegistry = xmlRegistry;
 
             var enums = Registry.EnumTypes;
             int numFound = 0;
