@@ -24,6 +24,19 @@ namespace GLThreadGen
 
 		public GLDataRegistry Registry { get; private set; }
 
+        private readonly static Dictionary<string, string> _HardcodedPascalReplacements = new Dictionary<string, string>{
+            {"Srgb", "SRGB"},
+            {"Rgba", "RGBA"},
+            {"Rgb", "RGB"},
+            {"Rg", "RG"},
+            {"Bgra", "BGRA"},
+            {"Bgr", "BGR"}
+        };
+
+        private readonly static Dictionary<string, string> _HardcodedEnumNameReplacements = new Dictionary<string, string>{
+            {"BufferTargetARB", "BufferTarget"}
+        };
+
         public string SCREAMING_SNAKE_ToPascalCase(string snake)
         {
             const int offset = 'a' - 'A';
@@ -31,19 +44,30 @@ namespace GLThreadGen
             bool cap = true;
             for(int i = 0; i < snake.Length; ++i)
             {
-                int c = snake[i];
+                char c = snake[i];
                 if (c == '_')
                 {
                     cap = true;
                     continue;
                 }
                 
-                /// TODO: Figure out why x is failing
-                if (c > 'Z' && !cap) cap = true;
+                if (c < 'A' || c > 'Z') cap = true;
                 build.Append((char)(c + (cap ? 0 : offset)));
                 cap = false;
+
+                if (LineParser.IsNumeric(c))
+                {
+                    cap = true;
+                }
             }
-            return build.ToString();
+            
+            // This is terrible, but we don't need to be super efficient here.
+            var val = build.ToString();
+            foreach(var rep in _HardcodedPascalReplacements)
+            {
+                val = val.Replace(rep.Key, rep.Value);
+            }
+            return val;
         }
 
         private string GetTypedEnum(Registry xmlRegistry, string groupName)
@@ -68,6 +92,10 @@ namespace GLThreadGen
                         }
 
                         enums.Add(groupName, enumEntry);
+                        if (_HardcodedEnumNameReplacements.ContainsKey(enumEntry.Name))
+                        {
+                            enumEntry.Name = _HardcodedEnumNameReplacements[enumEntry.Name];
+                        }
                         enumName = enumEntry.Name;
                         break;
                     }
@@ -105,6 +133,7 @@ namespace GLThreadGen
                         if (enumName != null)
                         {
                             func.Type.ReturnType = enumName;
+                            func.Type.IsReturnEnum = true;
                         }
                     }
 
@@ -115,12 +144,20 @@ namespace GLThreadGen
                             string enumName = GetTypedEnum(xmlRegistry, param.Group);
                             if (enumName != null)
                             {
-                                Console.WriteLine($"Found enum {enumName} for {func.NoGLName}({param.Name})");
                                 foreach(var fArg in func.Type.Arguments)
                                 {
                                     if (fArg.Name == param.Name)
                                     {
-                                        fArg.Type = enumName;
+                                        if (fArg.Type == "GLenum")
+                                        {
+                                            fArg.IsEnumType = true;
+                                            fArg.Type = enumName;
+                                        }
+                                        else
+                                        {
+                                            // TODO: This doesn't work in the general case, so let's not bother with it
+                                            //fArg.Type = fArg.Type.Replace("GLenum", "multigl::" + enumName);
+                                        }
                                     }
                                 }
                             }

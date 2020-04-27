@@ -171,7 +171,8 @@ namespace GLThreadGen
                                                 }
                                                 else
                                                 {
-                                                    await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
+                                                    var fullType = $"{(arg.IsEnumType ? "multigl::" : "")}{arg.Type}";
+                                                    await context.EmitLine($"{fullType} {arg.Name} = {DataBuffer}.read<{fullType}>();");
                                                 }
                                             }
                                         }
@@ -188,15 +189,27 @@ namespace GLThreadGen
                                                 }
                                                 else
                                                 {
-                                                    await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{arg.Type}>();");
+                                                    var fullType = $"{(arg.IsEnumType ? "multigl::" : "")}{arg.Type}";
+                                                    await context.EmitLine($"{arg.Type} {arg.Name} = {DataBuffer}.read<{fullType}>();");
                                                 }
                                             }
-                                            await context.EmitLine($"auto returnVal = {DataBuffer}.read<{function.Type.ReturnType}*>();");
+
+                                            {
+                                                var fullType = $"{(function.Type.IsReturnEnum ? "multigl::" : "")}{function.Type.ReturnType}";
+                                                await context.EmitLine($"auto returnVal = {DataBuffer}.read<{fullType}*>();");
+                                            }
                                             await context.EmitLine("if (returnVal)");
                                             await context.EmitScope(async () => {
                                                 context.EmitIndent();
 
-                                                await context.Emit($"GL_CHECK(*returnVal = {function.Name}(");
+                                                if (function.Type.IsReturnEnum)
+                                                {
+                                                    await context.Emit($"GL_CHECK(*returnVal = {function.Type.ReturnType}({function.Name}(");
+                                                }
+                                                else
+                                                {
+                                                    await context.Emit($"GL_CHECK(*returnVal = ({function.Name}(");
+                                                }
                                                 for (int i = 0; i < args.Count; ++i)
                                                 {
                                                     var arg = args[i];
@@ -207,7 +220,7 @@ namespace GLThreadGen
                                                     }
                                                 }
 
-                                                await context.EmitLineUnindented($"));");
+                                                await context.EmitLineUnindented($")));");
                                                 await context.EmitLine("return;");
                                             });
                                         }
@@ -325,7 +338,8 @@ namespace GLThreadGen
                         for (int i = 0; i < function.Type.Arguments.Count; ++i)
                         {
                             var arg = function.Type.Arguments[i];
-                            await context.Emit($"{arg.Type} {arg.Name}");
+                            var fullType = $"{(arg.IsEnumType ? "multigl::" : "")}{arg.Type}";
+                            await context.Emit($"{fullType} {arg.Name}");
                             if (i < function.Type.Arguments.Count - 1)
                             {
                                 await context.Emit(", ");
@@ -539,7 +553,8 @@ namespace GLThreadGen
                                 for (int i = 0; i < function.Type.Arguments.Count; ++i)
                                 {
                                     var arg = function.Type.Arguments[i];
-                                    await context.Emit($"{arg.Type} {arg.Name}");
+                                    var fullType = $"{(arg.IsEnumType ? "multigl::" : "")}{arg.Type}";
+                                    await context.Emit($"{fullType} {arg.Name}");
                                     if (i < function.Type.Arguments.Count - 1)
                                     {
                                         await context.Emit(", ");

@@ -20,13 +20,15 @@ namespace GLThreadGen
 			}
 		}
 
-        public string Type;
+        public bool IsEnumType;
+		public string Type;
 		public string Name;
 	}
 
 	public class FunctionDeclaration
 	{
 		public string TypedefName;
+		public bool IsReturnEnum;
 		public string ReturnType;
 		public List<FunctionArgument> Arguments = new List<FunctionArgument>();
 
@@ -134,6 +136,6 @@ namespace GLThreadGen
 		public HashSet<string> Defines = new HashSet<string>();
         public Dictionary<string, FunctionDeclaration> FunctionTypes = new Dictionary<string, FunctionDeclaration>();
 		public Dictionary<string, FunctionEntry> Functions = new Dictionary<string, FunctionEntry>();
-        public new Dictionary<string, GLEnum> EnumTypes = new Dictionary<string, GLEnum>();
+        public Dictionary<string, GLEnum> EnumTypes = new Dictionary<string, GLEnum>();
     }
 }
